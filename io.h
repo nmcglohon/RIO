@@ -23,6 +23,8 @@ extern unsigned int g_io_keep_last_n_checkpoints;
 extern char g_io_checkpoint_base_name[8192];
 extern char g_io_load_checkpoint_name[8192];
 
+extern unsigned int g_io_checkpoints_saved;
+
 // Register opts with ROSS
 extern const tw_optdef io_opts[10];
 
@@ -46,6 +48,7 @@ void io_register_model_version(char *sha1);
 void io_init();
 
 void io_load_checkpoint(char * master_filename, io_load_type load_at);
+void io_create_checkpoint(char * master_filename);
 void io_store_checkpoint(char * master_filename, int data_file_number);
 void io_appending_job();
 
