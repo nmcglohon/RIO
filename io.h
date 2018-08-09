@@ -17,10 +17,14 @@ extern unsigned int g_io_store;
 // Mode 1 leaves the timestamp unaltered, i.e. serialized timestamp = evt_ts
 extern unsigned int g_io_evt_ts_mode;
 
-
+extern unsigned int g_io_checkpoint_gvt_interval;
+extern unsigned int g_io_overwrite_policy;
+extern unsigned int g_io_keep_last_n_checkpoints;
+extern char g_io_checkpoint_base_name[8192];
+extern char g_io_load_checkpoint_name[8192];
 
 // Register opts with ROSS
-extern const tw_optdef io_opts[5];
+extern const tw_optdef io_opts[10];
 
 enum io_load_e {
 	NONE,		// default value

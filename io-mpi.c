@@ -15,11 +15,22 @@
 int g_io_number_of_files = 1;
 unsigned int g_io_store = 2;
 unsigned int g_io_evt_ts_mode = 0;
+unsigned int g_io_checkpoint_gvt_interval = 1;
+unsigned int g_io_overwrite_policy = 0;
+unsigned int g_io_keep_last_n_checkpoints = 1;
+char g_io_checkpoint_base_name[8192];
+char g_io_load_checkpoint_name[8192];
+
 const tw_optdef io_opts[] = {
     TWOPT_GROUP("RIO"),
     TWOPT_UINT("io-files", g_io_number_of_files, "io files"),
     TWOPT_UINT("io-store", g_io_store, "io store mode (0 Load | 1 Save | 2 Disable"),
     TWOPT_UINT("io-evt-ts-mode", g_io_evt_ts_mode, "post-simulation event timestep mode (0 Reset (default) | 1 Unaltered"),
+    TWOPT_UINT("rio-checkpoint-gvt-interval", g_io_checkpoint_gvt_interval, "frequency of RIO checkpointing in multiples of GVT (Default 1)"),
+    TWOPT_UINT("rio-overwrite-policy", g_io_overwrite_policy, "define RIO checkpoint overwrite behavior (0 Never (default) | 1 Always | 2 Keep Last N"),
+    TWOPT_UINT("rio-keep-last-n-checkpoints", g_io_keep_last_n_checkpoints, "keep last N checkpoints when overwrite policy is 2 (Keep Last N), (Default 1)"),
+    TWOPT_CHAR("rio-checkpoint-base-name", g_io_checkpoint_base_name, "base name for RIO checkpointing for this simulation (Default: 'rio-checkpoint')"),
+    TWOPT_CHAR("rio-load-checkpoint", g_io_load_checkpoint_name, "path to checkpoint you wish to load - if undefined, simulation will start from scratch"),
     TWOPT_END()
 };
 
