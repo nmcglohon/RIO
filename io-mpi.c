@@ -115,6 +115,10 @@ void io_init() {
     g_io_buffered_events.size = 0;
     g_io_buffered_events.head = g_io_buffered_events.tail = NULL;
 
+    if (strcmp(g_io_checkpoint_base_name, "") == 0) {
+        strcpy(g_io_checkpoint_base_name,"rio-checkpoint");
+    }
+
     unsigned int g_io_checkpoints_saved = 0;
 }
 
