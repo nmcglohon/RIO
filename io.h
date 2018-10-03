@@ -5,6 +5,10 @@
 //Rensselaer Polytechnic Institute
 //Decemeber 13, 2013
 
+//Neil McGlohon
+//Rensselaer Polytechnic Institute
+//2017-2018
+
 // ** Global IO System variables ** //
 
 // Set with command line --io-files
@@ -144,4 +148,8 @@ size_t io_event_deserialize (tw_event * e, void * buffer);
 extern tw_eventq g_io_buffered_events;
 extern tw_eventq g_io_free_events;
 extern tw_event * io_event_grab(tw_pe *pe);
+
+extern void io_store_transit_event(tw_event* e);
+extern void io_remove_transit_event(tw_event* e);
+extern void io_prune_transit_queue(tw_pe *pe);
 #endif

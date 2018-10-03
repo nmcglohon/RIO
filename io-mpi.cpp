@@ -8,6 +8,9 @@
 #include "mpi.h"
 #include "ross.h"
 #include "io-config.h"
+#include <vector>
+
+using namespace std;
 
 //#define RIO_DEBUG
 
@@ -44,6 +47,8 @@ int g_io_events_buffered_per_rank = 0;
 tw_eventq g_io_buffered_events;
 tw_eventq g_io_free_events;
 
+std::vector<tw_event*> g_io_in_transit_gvt_events;
+
 // Local Variables
 static unsigned long l_io_kp_offset = 0;    // MPI_Exscan
 static unsigned long l_io_lp_offset = 0;    // MPI_Exscan
@@ -57,6 +62,41 @@ char model_version[41];
 
 void io_register_model_version (char *sha1) {
     strcpy(model_version, sha1);
+}
+
+void io_store_transit_event(tw_event* e)
+{
+    g_io_in_transit_gvt_events.push_back(e);
+}
+
+void io_remove_transit_event(tw_event* e)
+{
+    tw_eventid search_id = e->event_id;
+
+    std::vector<tw_event*>::iterator it = g_io_in_transit_gvt_events.begin();
+    for (; it != g_io_in_transit_gvt_events.end(); it++)
+    {
+        if ( (*it)->event_id == search_id ) {
+            g_io_in_transit_gvt_events.erase(it);
+        }
+    }
+}
+
+void io_prune_transit_queue(tw_pe *pe)
+{
+    tw_stime last_gvt_ts = pe->GVT;
+    int pruned_count = 0;
+
+    std::vector<tw_event*>::iterator it = g_io_in_transit_gvt_events.begin();
+    for (; it != g_io_in_transit_gvt_events.end(); it++)
+    {
+        tw_stime event_recv_ts = (*it)->recv_ts;
+        if (event_recv_ts < last_gvt_ts) {
+            g_io_in_transit_gvt_events.erase(it);
+            pruned_count++;
+        }
+    }
+    // printf("Pruned: %d\n",pruned_count);
 }
 
 tw_event * io_event_grab(tw_pe *pe) {
@@ -290,7 +330,7 @@ void io_create_checkpoint(char * master_filename)
     int ranks_per_file = tw_nnodes() / g_io_number_of_files;
     int data_file = g_tw_mynode / ranks_per_file;
 
-    // printf("create checkpoint\n");
+    printf("create checkpoint - transit_events=%d\n",g_io_in_transit_gvt_events.size());
 
     io_store_checkpoint(master_filename, data_file);    
 
@@ -300,6 +340,7 @@ void io_create_checkpoint(char * master_filename)
 
 
 void io_store_checkpoint(char * master_filename, int data_file_number) {
+    printf("Store Start\n");
     int i, c, cur_kp;
     int mpi_rank = g_tw_mynode;
     int number_of_mpitasks = tw_nnodes();
@@ -551,6 +592,9 @@ void io_store_checkpoint(char * master_filename, int data_file_number) {
         }
 
     }
+
+    printf("Store End\n");
+
 }
 
 /* Initializes the size of the g_io_lp_types so that lptypes can be registered
@@ -562,7 +606,7 @@ void io_store_checkpoint(char * master_filename, int data_file_number) {
 */
 void io_init_lp_types(size_t total_lp_types)
 {
-    io_lp_type_registry = calloc(total_lp_types+1, sizeof(io_lptype));
+    io_lp_type_registry = (io_lptype*) calloc(total_lp_types+1, sizeof(io_lptype));
 }
 
 /* Registers an io_lptype with RIO. Not necessary if g_io_lp_types is manually defined.
