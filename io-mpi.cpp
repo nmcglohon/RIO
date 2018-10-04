@@ -74,11 +74,13 @@ void io_remove_transit_event(tw_event* e)
     tw_eventid search_id = e->event_id;
 
     std::vector<tw_event*>::iterator it = g_io_in_transit_gvt_events.begin();
-    for (; it != g_io_in_transit_gvt_events.end(); it++)
+    for (; it != g_io_in_transit_gvt_events.end(); )
     {
         if ( (*it)->event_id == search_id ) {
-            g_io_in_transit_gvt_events.erase(it);
+            it = g_io_in_transit_gvt_events.erase(it);
         }
+        else
+            ++it;
     }
 }
 
@@ -88,13 +90,15 @@ void io_prune_transit_queue(tw_pe *pe)
     int pruned_count = 0;
 
     std::vector<tw_event*>::iterator it = g_io_in_transit_gvt_events.begin();
-    for (; it != g_io_in_transit_gvt_events.end(); it++)
+    for (; it != g_io_in_transit_gvt_events.end(); )
     {
         tw_stime event_recv_ts = (*it)->recv_ts;
         if (event_recv_ts < last_gvt_ts) {
-            g_io_in_transit_gvt_events.erase(it);
+            it = g_io_in_transit_gvt_events.erase(it);
             pruned_count++;
         }
+        else
+            ++it;
     }
     // printf("Pruned: %d\n",pruned_count);
 }
