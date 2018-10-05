@@ -133,7 +133,6 @@ typedef struct {
 typedef struct {
 	tw_peid id;
 	tw_node node;
-	tw_petype type;
 	
 	tw_clock clock_offset;
 	tw_clock clock_time;
@@ -154,6 +153,8 @@ typedef struct {
 	tw_statistics stats;
 
 	//NOT IN THIS STORAGE STRUCT:
+	// - tw_petype type;
+
 	// - tw_eventq event_q;
 	// - tw_event *cancel_q;
 	// - tw_pq *pq;
@@ -203,4 +204,9 @@ extern void io_track_event(tw_event* e);
 extern void io_remove_tracked_event(tw_event* e);
 extern void io_prune_transit_queue(tw_pe *pe);
 extern void io_remove_stale_events_from_register(tw_pe *pe);
+
+// io-util functions
+extern unsigned long long get_unique_event_hash(tw_event *e);
+
+
 #endif

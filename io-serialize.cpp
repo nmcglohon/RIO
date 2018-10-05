@@ -87,12 +87,49 @@ size_t io_event_deserialize (tw_event *e, void *buffer) {
     return sizeof(io_event_store);
 }
 
+size_t io_eventq_serialize (tw_eventq * q, void * buffer)
+{
+    size_t num_events = q->size;
+    for (int i = 0; i < num_events; i++)
+    {
+        
+    }
+
+}
+
 size_t io_pe_serialize (tw_pe * me, void * buffer) 
 {
-    io_pe_store tmp_pe;
+    unsigned long long offset = 0;
 
-    
+    io_pe_store tmp;
+    tmp.id = me->id;
+    tmp.node = me->node;
 
+    tmp.clock_offset = me->clock_offset;
+    tmp.clock_time = me->clock_time;
+
+    tmp.cev_abort = me->cev_abort;
+    tmp.master = me->master;
+    tmp.local_master = me->master;
+    tmp.gvt_status = me->gvt_status;
+
+    tmp.trans_msg_ts = me->trans_msg_ts;
+    tmp.GVT = me->GVT;
+    tmp.GVT_prev = me->GVT_prev;
+    tmp.LVT = me->LVT;
+
+    tmp.start_time = me->start_time;
+    tmp.end_time = me->end_time;
+    // end io_pe_store copying
+
+    memcpy(buffer, &tmp, sizeof(io_pe_store));
+    offset += sizeof(io_pe_store);
+
+
+
+    //THINGS NOT SERIALIZED:
+    // tw_petype type;
+    // 
 
     return 0;
 }
