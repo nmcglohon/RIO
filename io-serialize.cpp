@@ -86,3 +86,20 @@ size_t io_event_deserialize (tw_event *e, void *buffer) {
     // printf("Loading event going to %lu at %f\n", tmp.dest_lp, tmp.recv_ts);
     return sizeof(io_event_store);
 }
+
+size_t io_pe_serialize (tw_pe * me, void * buffer) 
+{
+    io_pe_store tmp_pe;
+
+    
+
+
+    return 0;
+}
+
+size_t io_pe_deserialize (tw_pe * me, void * buffer)
+{
+
+
+    return 0;
+}

@@ -45,7 +45,7 @@ io_load_type g_io_load_at = NONE;
 char g_io_checkpoint_name[1024];
 int g_io_events_buffered_per_rank = 0;
 tw_eventq g_io_buffered_events;
-tw_eventq g_io_free_events;
+// tw_eventq g_io_free_events;
 
 std::vector<tw_event*> g_io_in_transit_gvt_events;
 
@@ -64,12 +64,17 @@ void io_register_model_version (char *sha1) {
     strcpy(model_version, sha1);
 }
 
-void io_store_transit_event(tw_event* e)
+tw_event * io_get_free_event()
+{
+    return tw_eventq_pop(&g_tw_pe[0]->free_q);
+}
+
+void io_track_event(tw_event* e)
 {
     g_io_in_transit_gvt_events.push_back(e);
 }
 
-void io_remove_transit_event(tw_event* e)
+void io_remove_tracked_event(tw_event* e)
 {
     tw_eventid search_id = e->event_id;
 
@@ -84,6 +89,25 @@ void io_remove_transit_event(tw_event* e)
     }
 }
 
+void io_remove_stale_events_from_register(tw_pe *pe)
+{
+    tw_stime last_gvt_ts = pe->GVT;
+    int pruned_count;
+
+    std::vector<tw_event*>::iterator it = g_io_in_transit_gvt_events.begin();
+    for (; it != g_io_in_transit_gvt_events.end(); )
+    {
+        tw_stime event_recv_ts = (*it)->recv_ts;
+        if (event_recv_ts < last_gvt_ts) {
+            it = g_io_in_transit_gvt_events.erase(it);
+            pruned_count++;        }
+        else
+            ++it; //manually advance iterator
+    }    
+    // printf("Pruned: %d\n",pruned_count);
+}
+
+//ONLY CALL THIS RIGHT BEFORE CHECKPOINTING
 void io_prune_transit_queue(tw_pe *pe)
 {
     tw_stime last_gvt_ts = pe->GVT;
@@ -93,48 +117,52 @@ void io_prune_transit_queue(tw_pe *pe)
     for (; it != g_io_in_transit_gvt_events.end(); )
     {
         tw_stime event_recv_ts = (*it)->recv_ts;
-        if (event_recv_ts < last_gvt_ts) {
+        tw_event_owner owner = (tw_event_owner) (*it)->state.owner;
+        if ((event_recv_ts < last_gvt_ts) || (owner == TW_pe_free_q)) {
             it = g_io_in_transit_gvt_events.erase(it);
-            pruned_count++;
-        }
+            pruned_count++;        }
         else
-            ++it;
-    }
+            ++it; //manually advance iterator
+    }    
     // printf("Pruned: %d\n",pruned_count);
 }
 
-tw_event * io_event_grab(tw_pe *pe) {
-    if (!l_io_init_flag || g_io_events_buffered_per_rank == 0) {
-      // the RIO system has not been initialized
-      // or we are not buffering events
-      return pe->abort_event;
-    }
+// tw_event * io_event_grab(tw_pe *pe) {
+//     if (!l_io_init_flag || g_io_events_buffered_per_rank == 0) {
+//       // the RIO system has not been initialized
+//       // or we are not buffering events
+//       return pe->abort_event;
+//     }
 
-    tw_clock start = tw_clock_read();
-    tw_event  *e = tw_eventq_pop(&g_io_free_events);
+//     tw_clock start = tw_clock_read();
+//     tw_event  *e = tw_eventq_pop(&g_io_free_events);
 
-    if (e) {
-        e->cancel_next = NULL;
-        e->caused_by_me = NULL;
-        e->cause_next = NULL;
-        e->prev = e->next = NULL;
+//     if (e) {
+//         e->cancel_next = NULL;
+//         e->caused_by_me = NULL;
+//         e->cause_next = NULL;
+//         e->prev = e->next = NULL;
 
-        memset(&e->state, 0, sizeof(e->state));
-        memset(&e->event_id, 0, sizeof(e->event_id));
-        tw_eventq_push(&g_io_buffered_events, e);
-    } else {
-        printf("WARNING: did not allocate enough events to RIO buffer\n");
-        e = pe->abort_event;
-    }
-    pe->stats.s_rio_load += (tw_clock_read() - start);
-    e->state.owner = IO_buffer;
-    return e;
-}
+//         memset(&e->state, 0, sizeof(e->state));
+//         memset(&e->event_id, 0, sizeof(e->event_id));
+//         tw_eventq_push(&g_io_buffered_events, e);
+//     } else {
+//         printf("WARNING: did not allocate enough events to RIO buffer\n");
+//         e = pe->abort_event;
+//     }
+//     pe->stats.s_rio_load += (tw_clock_read() - start);
+//     e->state.owner = IO_buffer;
+//     return e;
+// }
 
 void io_event_cancel(tw_event *e) {
-    tw_eventq_delete_any(&g_io_buffered_events, e);
-    tw_eventq_push(&g_io_free_events, e);
+    io_remove_tracked_event(e);
 }
+
+// void io_event_cancel(tw_event *e) {
+//     tw_eventq_delete_any(&g_io_buffered_events, e);
+//     tw_eventq_push(&g_io_free_events, e);
+// }
 
 void io_init() {
     int i;
@@ -154,17 +182,42 @@ void io_init() {
         printf("*** IO SYSTEM INIT ***\n\tFiles: %d\n\tParts: %lu\n\n", g_io_number_of_files, l0_io_total_kp);
     }
 
-    g_io_free_events.size = 0;
-    g_io_free_events.head = g_io_free_events.tail = NULL;
-    g_io_buffered_events.size = 0;
-    g_io_buffered_events.head = g_io_buffered_events.tail = NULL;
-
     if (strcmp(g_io_checkpoint_base_name, "") == 0) {
         strcpy(g_io_checkpoint_base_name,"rio-checkpoint");
     }
 
     unsigned int g_io_checkpoints_saved = 0;
 }
+
+// void io_init() {
+//     int i;
+
+//     assert(l_io_init_flag == 0 && "ERROR: RIO system already initialized");
+//     l_io_init_flag = 1;
+
+//     MPI_Exscan(&g_tw_nkp, &l_io_kp_offset, 1, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
+//     MPI_Exscan(&g_tw_nlp, &l_io_lp_offset, 1, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
+//     MPI_Reduce(&g_tw_nkp, &l0_io_total_kp, 1, MPI_UNSIGNED_LONG, MPI_SUM, 0, MPI_COMM_WORLD);
+//     MPI_Reduce(&g_tw_nlp, &l0_io_total_lp, 1, MPI_UNSIGNED_LONG, MPI_SUM, 0, MPI_COMM_WORLD);
+
+//     // Use collectives where ever possible
+//     MPI_Allreduce(&g_tw_nkp, &l_io_min_parts, 1, MPI_UNSIGNED_LONG, MPI_MIN, MPI_COMM_WORLD);
+
+//     if (g_tw_mynode == 0) {
+//         printf("*** IO SYSTEM INIT ***\n\tFiles: %d\n\tParts: %lu\n\n", g_io_number_of_files, l0_io_total_kp);
+//     }
+
+//     g_io_free_events.size = 0;
+//     g_io_free_events.head = g_io_free_events.tail = NULL;
+//     g_io_buffered_events.size = 0;
+//     g_io_buffered_events.head = g_io_buffered_events.tail = NULL;
+
+//     if (strcmp(g_io_checkpoint_base_name, "") == 0) {
+//         strcpy(g_io_checkpoint_base_name,"rio-checkpoint");
+//     }
+
+//     unsigned int g_io_checkpoints_saved = 0;
+// }
 
 // This run is part of a larger set of DISPARATE runs
 // append the .md and .lp files
@@ -283,10 +336,11 @@ void io_read_checkpoint() {
             }
         }
 
-        assert(my_partitions[cur_part].ev_count <= g_io_free_events.size);
+        // assert(my_partitions[cur_part].ev_count <= g_io_free_events.size);
         for (i = 0; i < my_partitions[cur_part].ev_count; i++) {
             // SEND THESE EVENTS
-            tw_event *ev = tw_eventq_pop(&g_io_free_events);
+            // tw_event *ev = tw_eventq_pop(&g_io_free_events);
+            tw_event *ev = io_get_free_event();
             b += io_event_deserialize(ev, b);
             void * msg = tw_event_data(ev);
             memcpy(msg, b, g_tw_msg_sz);
@@ -319,7 +373,8 @@ void io_load_events(tw_pe * me) {
         void *nmsg = tw_event_data(n);
         memcpy(&(n->cv), &(e->cv), sizeof(tw_bf));
         memcpy(nmsg, emsg, g_tw_msg_sz);
-        tw_eventq_push(&g_io_free_events, e);
+        tw_event_free(me, e);
+        // tw_eventq_push(&g_io_free_events, e);
         tw_event_send(n);
 
         if (me->cev_abort) {
@@ -329,12 +384,14 @@ void io_load_events(tw_pe * me) {
     g_tw_lookahead = original_lookahead;
 }
 
-void io_create_checkpoint(char * master_filename)
+void io_create_checkpoint(tw_pe *me, char * master_filename)
 {
+    // io_prune_transit_queue(me);
+
     int ranks_per_file = tw_nnodes() / g_io_number_of_files;
     int data_file = g_tw_mynode / ranks_per_file;
 
-    printf("create checkpoint - transit_events=%d\n",g_io_in_transit_gvt_events.size());
+    printf("create checkpoint\n");
 
     io_store_checkpoint(master_filename, data_file);    
 
@@ -344,7 +401,7 @@ void io_create_checkpoint(char * master_filename)
 
 
 void io_store_checkpoint(char * master_filename, int data_file_number) {
-    printf("Store Start\n");
+    // printf("Store Start\n");
     int i, c, cur_kp;
     int mpi_rank = g_tw_mynode;
     int number_of_mpitasks = tw_nnodes();
@@ -453,7 +510,8 @@ void io_store_checkpoint(char * master_filename, int data_file_number) {
             b += io_event_serialize(ev, b);
             void * msg = tw_event_data(ev);
             memcpy(b, msg, g_tw_msg_sz);
-            tw_eventq_push(&g_io_free_events, ev);
+            tw_event_free(g_tw_pe[0], ev);
+            // tw_eventq_push(&g_io_free_events, ev);
             b += g_tw_msg_sz;
         }
 
@@ -597,7 +655,7 @@ void io_store_checkpoint(char * master_filename, int data_file_number) {
 
     }
 
-    printf("Store End\n");
+    // printf("Store End\n");
 
 }
 

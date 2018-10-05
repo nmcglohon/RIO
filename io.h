@@ -52,7 +52,7 @@ void io_register_model_version(char *sha1);
 void io_init();
 
 void io_load_checkpoint(char * master_filename, io_load_type load_at);
-void io_create_checkpoint(char * master_filename);
+void io_create_checkpoint(tw_pe *me, char * master_filename);
 void io_store_checkpoint(char * master_filename, int data_file_number);
 void io_appending_job();
 
@@ -130,6 +130,55 @@ typedef struct {
 	// NOTE: not storing tw_memory or tw_out
 } io_event_store;
 
+typedef struct {
+	tw_peid id;
+	tw_node node;
+	tw_petype type;
+	
+	tw_clock clock_offset;
+	tw_clock clock_time;
+
+	unsigned char cev_abort;
+	unsigned char master;
+	unsigned char local_master;
+	unsigned char gvt_status;
+
+	tw_stime trans_msg_ts;
+	tw_stime GVT;
+	tw_stime GVT_prev;
+	tw_stime LVT;
+
+	tw_wtime start_time;
+	tw_wtime end_time;
+
+	tw_statistics stats;
+
+	//NOT IN THIS STORAGE STRUCT:
+	// - tw_eventq event_q;
+	// - tw_event *cancel_q;
+	// - tw_pq *pq;
+	// - tw_kp *kp_list;
+	// - tw_pe **pe_next;
+
+	// - tw_eventq free_q;
+	// - tw_event *abort_event;
+	// - tw_event *cur_event;
+	// - tw_eventq sevent_q;
+
+	// - unsigned char *delta_buffer[3];
+
+	// - AvlTree avl_list_head;
+	// - unsigned avl_tree_size;
+
+	// ROSS MEMORY stuff
+	// ROSS GVT MPI ALLREDUCE stuff
+
+	// void *hash_t;
+	// tw_eventid *seq_num; or it's tw_eventid seq_num counterpart for ROSS_NETWORK_mpi
+
+	// tw_rng *rng;
+} io_pe_store;
+
 extern io_partition * g_io_partitions;
 
 // Functions Called Directly from ROSS
@@ -147,9 +196,11 @@ size_t io_event_deserialize (tw_event * e, void * buffer);
 // INLINE function for buffering events past end time
 extern tw_eventq g_io_buffered_events;
 extern tw_eventq g_io_free_events;
-extern tw_event * io_event_grab(tw_pe *pe);
+extern tw_event * io_get_free_event();
+// extern tw_event * io_event_grab(tw_pe *pe);
 
-extern void io_store_transit_event(tw_event* e);
-extern void io_remove_transit_event(tw_event* e);
+extern void io_track_event(tw_event* e);
+extern void io_remove_tracked_event(tw_event* e);
 extern void io_prune_transit_queue(tw_pe *pe);
+extern void io_remove_stale_events_from_register(tw_pe *pe);
 #endif
